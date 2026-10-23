@@ -2,5 +2,7 @@
   "name": "系統櫃尺寸丈量與案場管理系統",
   "description": "專業系統櫃尺寸現場丈量與施工圖比對平台，具備毫米(mm)級公差警示、2D櫃體比例圖解、PDF藍圖瀏覽及即時同步。",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
