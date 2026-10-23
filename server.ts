@@ -35,10 +35,11 @@ const defaultStaff = [
     code: 'EMP-01',
     name: '阿耀',
     username: '阿耀',
+    password: '0311',
     title: '工程總監 / 主管',
     phone: '0910-888-031',
     role: 'supervisor',
-    notes: '具備全功能與最高管理審核權限',
+    notes: '【Level 1 總主管】全案場刪除、圖面審核開板、員工管理最高權限',
     createdAt: '2026-01-01T00:00:00.000Z',
     active: true,
   },
@@ -47,10 +48,11 @@ const defaultStaff = [
     code: 'EMP-02',
     name: '陳偉',
     username: 'chen',
-    title: '資深現場丈量工程師',
+    password: '1234',
+    title: '工務主任 / 協同主管',
     phone: '0922-333-444',
-    role: 'staff',
-    notes: '專責雙北豪宅與複丈工程',
+    role: 'leader',
+    notes: '【Level 2 協同主管】具備尺寸審核、圖面上傳與員工管理權限',
     createdAt: '2026-02-15T00:00:00.000Z',
     active: true,
   },
@@ -59,10 +61,11 @@ const defaultStaff = [
     code: 'EMP-03',
     name: '小張',
     username: 'chang',
-    title: '現場工務助理',
+    password: '1234',
+    title: '資深現場丈量工程師',
     phone: '0933-555-777',
-    role: 'staff',
-    notes: '負責現場雷射量測與水電孔位複查',
+    role: 'measurer',
+    notes: '【Level 3 丈量師】雷射實測登打、公差比對表填寫與圖面上傳',
     createdAt: '2026-03-01T00:00:00.000Z',
     active: true,
   },
@@ -71,11 +74,25 @@ const defaultStaff = [
     code: 'EMP-04',
     name: '林美惠',
     username: 'lin',
+    password: '1234',
     title: '系統櫃設計規劃師',
     phone: '0955-666-888',
-    role: 'staff',
-    notes: 'CAD施工圖繪製與發包核單',
+    role: 'measurer',
+    notes: '【Level 3 丈量師】CAD施工圖繪製與規劃尺寸登打',
     createdAt: '2026-04-10T00:00:00.000Z',
+    active: true,
+  },
+  {
+    id: 'emp-05',
+    code: 'EMP-05',
+    name: '王小妹',
+    username: 'wang',
+    password: '1234',
+    title: '實習工務助理 (僅查閱)',
+    phone: '0966-777-111',
+    role: 'readonly',
+    notes: '【Level 4 僅查閱】現場核對施工圖與尺寸，無修改權限',
+    createdAt: '2026-05-01T00:00:00.000Z',
     active: true,
   },
 ];
@@ -91,6 +108,22 @@ function loadData(): AppData {
       if (!parsed.staff || !Array.isArray(parsed.staff)) {
         parsed.staff = defaultStaff;
         saveData(parsed);
+      } else {
+        // Ensure all default staff are present
+        let staffModified = false;
+        for (const ds of defaultStaff) {
+          const existing = parsed.staff.find((s: any) => s.id === ds.id || s.username === ds.username);
+          if (!existing) {
+            parsed.staff.push(ds);
+            staffModified = true;
+          } else if (!existing.password) {
+            existing.password = ds.password;
+            staffModified = true;
+          }
+        }
+        if (staffModified) {
+          saveData(parsed);
+        }
       }
       return parsed;
     }

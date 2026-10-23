@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "JobSite": {
+      "title": "JobSite",
+      "description": "系統櫃現場案場資料",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteCode": { "type": "string" },
+        "name": { "type": "string" },
+        "clientName": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "spaceType": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedStaff": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "MeasurementSheet": {
+      "title": "MeasurementSheet",
+      "description": "系統櫃尺寸丈量與公差比對紀錄",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteId": { "type": "string" },
+        "cabinetName": { "type": "string" },
+        "category": { "type": "string" },
+        "roomLocation": { "type": "string" },
+        "planned": { "type": "object" },
+        "measured": { "type": "object" },
+        "supervisorApproved": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "siteId", "cabinetName"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "工務人員與主管名冊",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "title": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "username"]
+    }
+  },
+  "firestore": {
+    "/sites/{siteId}": {
+      "schema": { "$ref": "#/entities/JobSite" },
+      "description": "各案場基本資料集合"
+    },
+    "/measurements/{measurementId}": {
+      "schema": { "$ref": "#/entities/MeasurementSheet" },
+      "description": "各櫃體毫米級丈量表與公差集合"
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "工程人員名冊集合"
+    }
+  }
+}

@@ -21,6 +21,7 @@ import {
   deleteMeasurementSheet,
   resetSystemData,
   subscribeToSync,
+  subscribeToCloudSync,
 } from './services/api';
 import { Navbar } from './components/Navbar';
 import { SiteList } from './components/SiteList';
@@ -89,8 +90,21 @@ export default function App() {
     // Initial load
     reloadData();
 
+    // Real-time Cloud Sync (Firestore live listener across Mobile & Desktop)
+    const unsubscribeCloud = subscribeToCloudSync(
+      (cloudSites) => {
+        setSites(cloudSites);
+      },
+      (cloudMeasurements) => {
+        setMeasurements(cloudMeasurements);
+      },
+      (cloudStaff) => {
+        setStaffList(cloudStaff);
+      }
+    );
+
     // BroadcastChannel sync across tabs
-    const unsubscribe = subscribeToSync((type) => {
+    const unsubscribeLocal = subscribeToSync((type) => {
       reloadData(true);
       if (type === 'site_created') showToast('收到最新案場資料同步');
       if (type === 'measurement_saved') showToast('收到最新尺寸丈量紀錄');
@@ -102,7 +116,8 @@ export default function App() {
     }, 3000);
 
     return () => {
-      unsubscribe();
+      unsubscribeCloud();
+      unsubscribeLocal();
       clearInterval(pollInterval);
     };
   }, [reloadData, showToast]);

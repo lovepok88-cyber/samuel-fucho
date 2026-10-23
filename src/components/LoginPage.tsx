@@ -223,7 +223,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder={loginMode === 'supervisor' ? '例如：阿耀' : '輸入帳號 (如 chen, chang) 或姓名'}
+                      placeholder={loginMode === 'supervisor' ? '請輸入主管帳號 (例如：阿耀)' : '輸入帳號 (chen, chang, lin) 或姓名 (陳偉, 小張)'}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
                     />
                   </div>
@@ -232,7 +232,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-semibold text-slate-300">
-                      登入密碼
+                      {loginMode === 'supervisor' ? '主管密碼' : '員工密碼'}
                     </label>
                   </div>
                   <div className="relative">
@@ -241,7 +241,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="請輸入密碼"
+                      placeholder={loginMode === 'supervisor' ? '請輸入主管密碼' : '請輸入密碼 (員工預設密碼：1234)'}
                       className="w-full px-3.5 py-2.5 text-sm bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-mono tracking-wider pr-10"
                     />
                     <button
@@ -253,6 +253,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {loginMode === 'staff' && (
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      可使用帳號 (chen, chang, lin, wang) 或中文姓名，員工預設密碼為 1234
+                    </p>
+                  )}
                 </div>
 
                 {/* Submit Action Button */}

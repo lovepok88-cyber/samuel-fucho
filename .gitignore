@@ -8,3 +8,4 @@ coverage/
 !.env.example
 .aistudio/
 public/assets/aistudio/
+bun.lock

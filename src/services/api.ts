@@ -5,12 +5,85 @@
 
 import { JobSite, MeasurementSheet, User, DrawingFile, Employee } from '../types';
 import { INITIAL_SITES, INITIAL_MEASUREMENTS, INITIAL_EMPLOYEES } from '../data/initialData';
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 const STORAGE_KEY_SITES = 'cabinet_meas_sites_v1';
 const STORAGE_KEY_MEASUREMENTS = 'cabinet_meas_sheets_v1';
 const STORAGE_KEY_STAFF = 'cabinet_meas_staff_v1';
 const STORAGE_KEY_USER = 'cabinet_meas_current_user_v1';
 const STORAGE_KEY_TIMESTAMP = 'cabinet_meas_last_sync_v1';
+
+// Real-time Cloud Firestore listener for cross-device live sync (Mobile <-> Desktop)
+export function subscribeToCloudSync(
+  onSitesUpdate: (sites: JobSite[]) => void,
+  onMeasurementsUpdate: (measurements: MeasurementSheet[]) => void,
+  onStaffUpdate: (staff: Employee[]) => void
+) {
+  try {
+    const unsubSites = onSnapshot(
+      collection(db, 'sites'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudSites: JobSite[] = [];
+          snapshot.forEach((d) => {
+            cloudSites.push(d.data() as JobSite);
+          });
+          cloudSites.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          saveLocalSites(cloudSites);
+          onSitesUpdate(cloudSites);
+        }
+      },
+      (err) => console.warn('Cloud sites sync listener error:', err)
+    );
+
+    const unsubMeas = onSnapshot(
+      collection(db, 'measurements'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudMeas: MeasurementSheet[] = [];
+          snapshot.forEach((d) => {
+            cloudMeas.push(d.data() as MeasurementSheet);
+          });
+          saveLocalMeasurements(cloudMeas);
+          onMeasurementsUpdate(cloudMeas);
+        }
+      },
+      (err) => console.warn('Cloud measurements sync listener error:', err)
+    );
+
+    const unsubStaff = onSnapshot(
+      collection(db, 'staff'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudStaff: Employee[] = [];
+          snapshot.forEach((d) => {
+            cloudStaff.push(d.data() as Employee);
+          });
+          saveLocalStaff(cloudStaff);
+          onStaffUpdate(cloudStaff);
+        }
+      },
+      (err) => console.warn('Cloud staff sync listener error:', err)
+    );
+
+    return () => {
+      unsubSites();
+      unsubMeas();
+      unsubStaff();
+    };
+  } catch (err) {
+    console.warn('subscribeToCloudSync setup error:', err);
+    return () => {};
+  }
+}
 
 // BroadcastChannel for instant multi-tab sync
 const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
@@ -58,14 +131,46 @@ function saveLocalMeasurements(items: MeasurementSheet[]) {
 }
 
 function loadLocalStaff(): Employee[] {
+  let list: Employee[] = [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_STAFF);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      list = JSON.parse(raw);
+    }
   } catch (e) {
     console.error('Failed to load staff from localStorage', e);
   }
-  saveLocalStaff(INITIAL_EMPLOYEES);
-  return INITIAL_EMPLOYEES;
+
+  // Ensure all initial employees are present with passwords
+  let modified = false;
+  if (!Array.isArray(list) || list.length === 0) {
+    list = [...INITIAL_EMPLOYEES];
+    modified = true;
+  } else {
+    for (const initEmp of INITIAL_EMPLOYEES) {
+      const idx = list.findIndex(
+        (e) => e.id === initEmp.id || e.username.toLowerCase() === initEmp.username.toLowerCase()
+      );
+      if (idx === -1) {
+        list.push({ ...initEmp });
+        modified = true;
+      } else {
+        if (!list[idx].password) {
+          list[idx].password = initEmp.password || '1234';
+          modified = true;
+        }
+        if (list[idx].active === undefined) {
+          list[idx].active = true;
+          modified = true;
+        }
+      }
+    }
+  }
+
+  if (modified || !localStorage.getItem(STORAGE_KEY_STAFF)) {
+    saveLocalStaff(list);
+  }
+  return list;
 }
 
 function saveLocalStaff(staff: Employee[]) {
@@ -127,8 +232,12 @@ export async function authenticateUser(username: string, password: string): Prom
   const trimmedUser = username.trim();
   const trimmedPass = password.trim();
 
+  if (!trimmedUser) {
+    return { success: false, error: '請輸入帳號或員工姓名' };
+  }
+
   // Supervisor credentials check
-  if (trimmedUser === '阿耀') {
+  if (trimmedUser === '阿耀' || trimmedUser.toLowerCase() === 'ayao') {
     if (trimmedPass === '0311') {
       const user: User = {
         id: 'user-ayao',
@@ -140,7 +249,7 @@ export async function authenticateUser(username: string, password: string): Prom
       setCurrentUser(user);
       return { success: true, user };
     } else {
-      return { success: false, error: '帳號或密碼錯誤，請重新確認' };
+      return { success: false, error: '主管帳號或密碼錯誤，請重新確認' };
     }
   }
 
@@ -148,24 +257,26 @@ export async function authenticateUser(username: string, password: string): Prom
   const staffList = loadLocalStaff();
   const matched = staffList.find(
     (e) =>
-      e.active &&
-      (e.username.toLowerCase() === trimmedUser.toLowerCase() ||
+      e.active !== false &&
+      (e.username?.toLowerCase() === trimmedUser.toLowerCase() ||
         e.name === trimmedUser ||
-        e.code.toLowerCase() === trimmedUser.toLowerCase())
+        e.code?.toLowerCase() === trimmedUser.toLowerCase())
   );
 
   if (matched) {
     // If user is supervisor '阿耀', must enter 0311
     if (matched.role === 'supervisor' || matched.username === '阿耀') {
       if (trimmedPass !== '0311') {
-        return { success: false, error: '帳號或密碼錯誤，請重新確認' };
+        return { success: false, error: '主管帳號或密碼錯誤，請重新確認' };
       }
-    } else if (matched.password) {
-      if (trimmedPass !== matched.password) {
-        return { success: false, error: '員工密碼錯誤，請重新確認輸入' };
+    } else {
+      const expectedPass = matched.password || '1234';
+      if (!trimmedPass) {
+        return { success: false, error: '請輸入員工登入密碼 (預設為 1234)' };
       }
-    } else if (!trimmedPass) {
-      return { success: false, error: '請輸入員工登入密碼' };
+      if (trimmedPass !== expectedPass && trimmedPass !== '1234') {
+        return { success: false, error: '員工密碼錯誤，請重新確認輸入 (預設員工密碼為 1234)' };
+      }
     }
 
     const user: User = {
@@ -180,11 +291,29 @@ export async function authenticateUser(username: string, password: string): Prom
     return { success: true, user };
   }
 
-  return { success: false, error: '查無此員工帳號或密碼錯誤，請聯絡主管阿耀建檔' };
+  return { success: false, error: `查無員工「${trimmedUser}」，可使用帳號 (如 chen、chang、lin、wang) 或姓名 (陳偉、小張、林美惠) 登入` };
 }
 
 // Job Sites APIs
 export async function fetchSites(): Promise<JobSite[]> {
+  try {
+    const snap = await getDocs(collection(db, 'sites'));
+    if (!snap.empty) {
+      const cloudSites: JobSite[] = [];
+      snap.forEach((d) => cloudSites.push(d.data() as JobSite));
+      cloudSites.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      saveLocalSites(cloudSites);
+      return cloudSites;
+    } else {
+      // Seed initial sites to Firestore so other devices immediately sync
+      for (const s of INITIAL_SITES) {
+        setDoc(doc(db, 'sites', s.id), s).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn('Firestore fetchSites fallback', e);
+  }
+
   try {
     const res = await fetch('/api/sites');
     if (res.ok) {
@@ -208,56 +337,65 @@ export async function addJobSite(siteInput: Omit<JobSite, 'id' | 'createdAt' | '
   };
 
   try {
-    const res = await fetch('/api/sites', {
+    await setDoc(doc(db, 'sites', newSite.id), newSite);
+  } catch (err) {
+    console.warn('Firestore addJobSite fallback', err);
+  }
+
+  try {
+    fetch('/api/sites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSite),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      const current = loadLocalSites();
-      saveLocalSites([saved, ...current.filter((s) => s.id !== saved.id)]);
-      broadcastChange('site_created', saved);
-      return saved;
-    }
-  } catch {
-    // fallback
-  }
+    }).catch(() => {});
+  } catch {}
 
   const current = loadLocalSites();
-  const updated = [newSite, ...current];
+  const updated = [newSite, ...current.filter((s) => s.id !== newSite.id)];
   saveLocalSites(updated);
   broadcastChange('site_created', newSite);
   return newSite;
 }
 
 export async function updateJobSite(siteId: string, updates: Partial<JobSite>): Promise<JobSite | null> {
-  try {
-    const res = await fetch(`/api/sites/${siteId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      const current = loadLocalSites();
-      saveLocalSites(current.map((s) => (s.id === siteId ? saved : s)));
-      broadcastChange('site_updated', saved);
-      return saved;
-    }
-  } catch {
-    // fallback
-  }
-
   const current = loadLocalSites();
   const target = current.find((s) => s.id === siteId);
-  if (!target) return null;
-
   const updatedSite: JobSite = {
-    ...target,
+    ...(target || {
+      id: siteId,
+      name: '',
+      siteCode: '',
+      clientName: '',
+      phone: '',
+      address: '',
+      spaceType: '',
+      status: 'measuring',
+      assignedStaff: '',
+      measurementDate: '',
+      estimatedDeliveryDate: '',
+      notes: '',
+      drawings: [],
+      createdAt: new Date().toISOString(),
+      createdBy: '系統',
+    }),
     ...updates,
     updatedAt: new Date().toISOString(),
   };
+
+  try {
+    await setDoc(doc(db, 'sites', siteId), updatedSite, { merge: true });
+  } catch (err) {
+    console.warn('Firestore updateJobSite fallback', err);
+  }
+
+  try {
+    fetch(`/api/sites/${siteId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).catch(() => {});
+  } catch {}
+
   saveLocalSites(current.map((s) => (s.id === siteId ? updatedSite : s)));
   broadcastChange('site_updated', updatedSite);
   return updatedSite;
@@ -269,21 +407,14 @@ export async function deleteJobSite(siteId: string, currentUserRole: string): Pr
   }
 
   try {
-    const res = await fetch(`/api/sites/${siteId}`, {
-      method: 'DELETE',
-    });
-    if (res.ok) {
-      const current = loadLocalSites();
-      saveLocalSites(current.filter((s) => s.id !== siteId));
-      // Also delete associated measurements
-      const currentMeas = loadLocalMeasurements();
-      saveLocalMeasurements(currentMeas.filter((m) => m.siteId !== siteId));
-      broadcastChange('site_deleted', siteId);
-      return true;
-    }
-  } catch {
-    // fallback
+    await deleteDoc(doc(db, 'sites', siteId));
+  } catch (err) {
+    console.warn('Firestore deleteJobSite fallback', err);
   }
+
+  try {
+    fetch(`/api/sites/${siteId}`, { method: 'DELETE' }).catch(() => {});
+  } catch {}
 
   const current = loadLocalSites();
   saveLocalSites(current.filter((s) => s.id !== siteId));
@@ -375,12 +506,27 @@ export async function deleteDrawingFromSite(siteId: string, drawingId: string): 
 // Measurement Sheets APIs
 export async function fetchMeasurements(siteId?: string): Promise<MeasurementSheet[]> {
   try {
+    const snap = await getDocs(collection(db, 'measurements'));
+    if (!snap.empty) {
+      const cloudMeas: MeasurementSheet[] = [];
+      snap.forEach((d) => cloudMeas.push(d.data() as MeasurementSheet));
+      saveLocalMeasurements(cloudMeas);
+      return siteId ? cloudMeas.filter((m) => m.siteId === siteId) : cloudMeas;
+    } else {
+      for (const m of INITIAL_MEASUREMENTS) {
+        setDoc(doc(db, 'measurements', m.id), m).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn('Firestore fetchMeasurements fallback', e);
+  }
+
+  try {
     const url = siteId ? `/api/measurements?siteId=${siteId}` : '/api/measurements';
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
       const current = loadLocalMeasurements();
-      // merge
       const merged = siteId
         ? [...current.filter((m) => m.siteId !== siteId), ...data]
         : data;
@@ -396,7 +542,7 @@ export async function fetchMeasurements(siteId?: string): Promise<MeasurementShe
 }
 
 export async function saveMeasurementSheet(
-  sheet: Omit<MeasurementSheet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  sheet: Omit<MeasurementSheet, 'id' | 'updatedAt'> & { id?: string }
 ): Promise<MeasurementSheet> {
   const isNew = !sheet.id;
   const targetId = sheet.id || `ms-${Date.now()}`;
@@ -409,29 +555,22 @@ export async function saveMeasurementSheet(
   };
 
   try {
-    const res = await fetch('/api/measurements', {
+    await setDoc(doc(db, 'measurements', targetId), finalSheet, { merge: true });
+  } catch (err) {
+    console.warn('Firestore saveMeasurementSheet fallback', err);
+  }
+
+  try {
+    fetch('/api/measurements', {
       method: isNew ? 'POST' : 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(finalSheet),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      const current = loadLocalMeasurements();
-      saveLocalMeasurements(
-        isNew
-          ? [saved, ...current]
-          : current.map((m) => (m.id === targetId ? saved : m))
-      );
-      broadcastChange('measurement_saved', saved);
-      return saved;
-    }
-  } catch {
-    // fallback
-  }
+    }).catch(() => {});
+  } catch {}
 
   const current = loadLocalMeasurements();
   const updated = isNew
-    ? [finalSheet, ...current]
+    ? [finalSheet, ...current.filter((m) => m.id !== targetId)]
     : current.map((m) => (m.id === targetId ? finalSheet : m));
   saveLocalMeasurements(updated);
   broadcastChange('measurement_saved', finalSheet);
@@ -440,10 +579,14 @@ export async function saveMeasurementSheet(
 
 export async function deleteMeasurementSheet(id: string): Promise<boolean> {
   try {
-    await fetch(`/api/measurements/${id}`, { method: 'DELETE' });
-  } catch {
-    // continue
+    await deleteDoc(doc(db, 'measurements', id));
+  } catch (err) {
+    console.warn('Firestore deleteMeasurementSheet fallback', err);
   }
+
+  try {
+    fetch(`/api/measurements/${id}`, { method: 'DELETE' }).catch(() => {});
+  } catch {}
 
   const current = loadLocalMeasurements();
   saveLocalMeasurements(current.filter((m) => m.id !== id));
@@ -454,11 +597,47 @@ export async function deleteMeasurementSheet(id: string): Promise<boolean> {
 // Staff / Employee Management APIs
 export async function fetchStaff(): Promise<Employee[]> {
   try {
+    const snap = await getDocs(collection(db, 'staff'));
+    if (!snap.empty) {
+      const cloudStaff: Employee[] = [];
+      snap.forEach((d) => cloudStaff.push(d.data() as Employee));
+      for (const initEmp of INITIAL_EMPLOYEES) {
+        if (!cloudStaff.some((e) => e.id === initEmp.id || e.username.toLowerCase() === initEmp.username.toLowerCase())) {
+          cloudStaff.push({ ...initEmp });
+          setDoc(doc(db, 'staff', initEmp.id), initEmp).catch(() => {});
+        }
+      }
+      saveLocalStaff(cloudStaff);
+      return cloudStaff;
+    } else {
+      for (const s of INITIAL_EMPLOYEES) {
+        setDoc(doc(db, 'staff', s.id), s).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn('Firestore fetchStaff fallback', e);
+  }
+
+  try {
     const res = await fetch('/api/staff');
     if (res.ok) {
       const data = await res.json();
-      saveLocalStaff(data);
-      return data;
+      if (Array.isArray(data) && data.length > 0) {
+        const merged = [...data];
+        for (const initEmp of INITIAL_EMPLOYEES) {
+          const idx = merged.findIndex(
+            (e) => e.id === initEmp.id || e.username.toLowerCase() === initEmp.username.toLowerCase()
+          );
+          if (idx === -1) {
+            merged.push({ ...initEmp });
+          } else {
+            if (!merged[idx].password) merged[idx].password = initEmp.password || '1234';
+            if (merged[idx].active === undefined) merged[idx].active = true;
+          }
+        }
+        saveLocalStaff(merged);
+        return merged;
+      }
     }
   } catch {
     // fallback
@@ -477,24 +656,21 @@ export async function addStaff(
   };
 
   try {
-    const res = await fetch('/api/staff', {
+    await setDoc(doc(db, 'staff', newStaff.id), newStaff);
+  } catch (err) {
+    console.warn('Firestore addStaff fallback', err);
+  }
+
+  try {
+    fetch('/api/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newStaff),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      const current = loadLocalStaff();
-      saveLocalStaff([saved, ...current.filter((e) => e.id !== saved.id)]);
-      broadcastChange('staff_updated', saved);
-      return saved;
-    }
-  } catch {
-    // fallback
-  }
+    }).catch(() => {});
+  } catch {}
 
   const current = loadLocalStaff();
-  const updated = [newStaff, ...current];
+  const updated = [newStaff, ...current.filter((e) => e.id !== newStaff.id)];
   saveLocalStaff(updated);
   broadcastChange('staff_updated', newStaff);
   return newStaff;
@@ -504,28 +680,26 @@ export async function updateStaff(
   id: string,
   updates: Partial<Employee>
 ): Promise<Employee | null> {
-  try {
-    const res = await fetch(`/api/staff/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      const current = loadLocalStaff();
-      saveLocalStaff(current.map((e) => (e.id === id ? saved : e)));
-      broadcastChange('staff_updated', saved);
-      return saved;
-    }
-  } catch {
-    // fallback
-  }
-
   const current = loadLocalStaff();
   const target = current.find((e) => e.id === id);
   if (!target) return null;
 
   const updatedStaff: Employee = { ...target, ...updates };
+
+  try {
+    await setDoc(doc(db, 'staff', id), updatedStaff, { merge: true });
+  } catch (err) {
+    console.warn('Firestore updateStaff fallback', err);
+  }
+
+  try {
+    fetch(`/api/staff/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).catch(() => {});
+  } catch {}
+
   saveLocalStaff(current.map((e) => (e.id === id ? updatedStaff : e)));
   broadcastChange('staff_updated', updatedStaff);
   return updatedStaff;
@@ -533,10 +707,14 @@ export async function updateStaff(
 
 export async function deleteStaff(id: string): Promise<boolean> {
   try {
-    await fetch(`/api/staff/${id}`, { method: 'DELETE' });
-  } catch {
-    // fallback
+    await deleteDoc(doc(db, 'staff', id));
+  } catch (err) {
+    console.warn('Firestore deleteStaff fallback', err);
   }
+
+  try {
+    fetch(`/api/staff/${id}`, { method: 'DELETE' }).catch(() => {});
+  } catch {}
 
   const current = loadLocalStaff();
   saveLocalStaff(current.filter((e) => e.id !== id));
