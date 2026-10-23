@@ -1,0 +1,75 @@
+{
+  "sites": [
+    {
+      "id": "site-02",
+      "siteCode": "ST-2026-002",
+      "name": "大直明水路 陳公館 景觀別墅",
+      "clientName": "陳設計師 / 業主陳太太",
+      "phone": "0933-888-999",
+      "address": "台北市中山區明水路 600 巷 12 號 3F",
+      "spaceType": "精品更衣室與開放廚房電器櫃",
+      "status": "ordered",
+      "assignedStaff": "丈量工務小張",
+      "measurementDate": "2026-10-21",
+      "estimatedDeliveryDate": "2026-11-20",
+      "notes": "現場左側牆壁有 12mm 內傾歪斜，主臥大樑與設計櫃高有碰撞可能，待主管阿耀覆核裁定。",
+      "drawings": [],
+      "createdAt": "2026-10-21T02:00:00.000Z",
+      "updatedAt": "2026-10-23T06:31:45.226Z",
+      "createdBy": "小張"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "ms-03",
+      "siteId": "site-02",
+      "itemCode": "K-01",
+      "cabinetName": "廚房中島旁高身電器收納櫃",
+      "category": "kitchen_appliance",
+      "roomLocation": "餐廳與開放式廚房交界",
+      "planned": {
+        "width": 1200,
+        "height": 2400,
+        "depth": 650,
+        "skirting": 100,
+        "ceilingHeight": 2500,
+        "beamHeight": 2350,
+        "beamDepth": 550,
+        "fillerAllowance": 18
+      },
+      "measured": {
+        "width": 1200,
+        "height": 2400,
+        "depth": 650,
+        "skirting": 100,
+        "ceilingHeight": 2500,
+        "beamHeight": 0,
+        "beamDepth": 580,
+        "wallPlumbOffset": 0,
+        "floorLevelOffset": 8,
+        "outletCoords": "220V 專迴蒸烤爐插座 (距地 1200mm), 110V 電鍋排氣開關 (距地 850mm)",
+        "notes": "【重要警示】現場大樑壓頂且寬度縮水 18mm，若不降高或切樑，櫃體將完全頂死無法立櫃！"
+      },
+      "supervisorApproved": false,
+      "supervisorNotes": "待主管阿耀與設計師開會確認：需降高至 2320mm 或做大樑包板切角。",
+      "createdBy": "小張",
+      "updatedBy": "阿耀 (工程主管)",
+      "updatedAt": "2026-10-23T06:32:27.955Z"
+    }
+  ],
+  "lastModified": 1792737866154,
+  "staff": [
+    {
+      "id": "emp-01",
+      "code": "EMP-01",
+      "name": "阿耀",
+      "username": "阿耀",
+      "title": "工程總監 / 主管",
+      "phone": "0910-888-031",
+      "role": "supervisor",
+      "notes": "具備全功能與最高管理審核權限",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "active": true
+    }
+  ]
+}
