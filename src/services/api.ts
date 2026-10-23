@@ -80,20 +80,19 @@ function saveLocalStaff(staff: Employee[]) {
 export function getCurrentUser(): User | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_USER);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Clean up legacy auto-assigned default supervisor so initial load starts unauthenticated
+      if (parsed?.id === 'user-supervisor') {
+        localStorage.removeItem(STORAGE_KEY_USER);
+        return null;
+      }
+      return parsed;
+    }
   } catch {
     // fallback
   }
-  // Default to supervisor for convenience or prompt to login
-  const defaultSupervisor: User = {
-    id: 'user-supervisor',
-    username: '阿耀',
-    name: '阿耀 (工程主管)',
-    role: 'supervisor',
-    title: '總工程師 / 主管',
-  };
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(defaultSupervisor));
-  return defaultSupervisor;
+  return null;
 }
 
 export function setCurrentUser(user: User | null) {

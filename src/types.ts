@@ -94,8 +94,8 @@ export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
 };
 
 export function getRoleConfig(role?: UserRole): RolePermissionConfig {
-  if (!role) return ROLE_CONFIGS.measurer;
-  return ROLE_CONFIGS[role] || ROLE_CONFIGS.measurer;
+  if (!role) return ROLE_CONFIGS.readonly;
+  return ROLE_CONFIGS[role] || ROLE_CONFIGS.readonly;
 }
 
 export interface Employee {

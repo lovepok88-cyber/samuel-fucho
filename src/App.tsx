@@ -25,6 +25,7 @@ import {
 import { Navbar } from './components/Navbar';
 import { SiteList } from './components/SiteList';
 import { SiteDetail } from './components/SiteDetail';
+import { LoginPage } from './components/LoginPage';
 import { LoginModal } from './components/LoginModal';
 import { NewSiteModal } from './components/NewSiteModal';
 import { StaffModal } from './components/StaffModal';
@@ -111,13 +112,14 @@ export default function App() {
   // Authentication Handlers
   const handleLoginSuccess = (user: User) => {
     setUserState(user);
+    setIsLoginModalOpen(false);
     showToast(`歡迎 ${user.name}，已成功登入系統`);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setUserState(null);
-    setIsLoginModalOpen(true);
+    setIsLoginModalOpen(false);
     showToast('已登出系統');
   };
 
@@ -277,6 +279,23 @@ export default function App() {
       showToast('刪除失敗');
     }
   };
+
+  if (!currentUser) {
+    return (
+      <>
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          staffList={staffList}
+        />
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-medium border border-slate-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
